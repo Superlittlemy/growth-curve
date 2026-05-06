@@ -1,0 +1,1111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>婴儿生长曲线图 - 0-36个月</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: linear-gradient(135deg, #fff5f5 0%, #f0f8ff 50%, #fff5f5 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    /* 头部样式 */
+    .header {
+      text-align: center;
+      padding: 30px 20px;
+      background: linear-gradient(135deg, #FFB6C1 0%, #DDA0DD 50%, #87CEEB 100%);
+      border-radius: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 8px 32px rgba(255, 182, 193, 0.3);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .header::before {
+      content: "";
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%);
+      animation: shimmer 3s ease-in-out infinite;
+    }
+
+    @keyframes shimmer {
+      0%, 100% { transform: translate(0, 0); }
+      50% { transform: translate(10%, 10%); }
+    }
+
+    .header h1 {
+      color: #fff;
+      font-size: 2rem;
+      font-weight: 700;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      position: relative;
+      margin-bottom: 8px;
+    }
+
+    .header p {
+      color: rgba(255,255,255,0.9);
+      font-size: 1rem;
+      position: relative;
+    }
+
+    .header .icon-baby {
+      font-size: 3rem;
+      margin-bottom: 10px;
+      display: block;
+    }
+
+    /* 标准切换按钮 */
+    .standard-switch {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .standard-btn {
+      padding: 12px 28px;
+      border: none;
+      border-radius: 50px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+
+    .standard-btn.who {
+      background: #fff;
+      color: #4A90D9;
+    }
+
+    .standard-btn.who.active {
+      background: #4A90D9;
+      color: #fff;
+      transform: scale(1.05);
+    }
+
+    .standard-btn.china {
+      background: #fff;
+      color: #FF6B8A;
+    }
+
+    .standard-btn.china.active {
+      background: #FF6B8A;
+      color: #fff;
+      transform: scale(1.05);
+    }
+
+    .standard-btn:hover:not(.active) {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+    }
+
+    /* 性别选择 */
+    .gender-select {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+
+    .gender-option {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 24px;
+      background: #fff;
+      border-radius: 50px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+    }
+
+    .gender-option:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+    }
+
+    .gender-option.selected {
+      background: linear-gradient(135deg, #FFB6C1 0%, #DDA0DD 100%);
+      color: #fff;
+    }
+
+    .gender-option input {
+      display: none;
+    }
+
+    .gender-icon {
+      font-size: 1.5rem;
+    }
+
+    /* 图表卡片 */
+    .chart-card {
+      background: #fff;
+      border-radius: 20px;
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+      transition: transform 0.3s ease;
+    }
+
+    .chart-card:hover {
+      transform: translateY(-4px);
+    }
+
+    .chart-card h3 {
+      color: #555;
+      font-size: 1.1rem;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .chart-card h3 .icon {
+      font-size: 1.4rem;
+    }
+
+    .chart-card.height h3 { color: #4A90D9; }
+    .chart-card.weight h3 { color: #FF6B8A; }
+    .chart-card.bmi h3 { color: #9B59B6; }
+
+    .chart-container {
+      position: relative;
+      height: 280px;
+    }
+
+    /* 百分位说明 */
+    .percentile-legend {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 16px;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid #eee;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.85rem;
+      color: #666;
+    }
+
+    .legend-line {
+      width: 24px;
+      height: 3px;
+      border-radius: 2px;
+    }
+
+    .legend-line.p3 { background: #E74C3C; }
+    .legend-line.p15 { background: #F39C12; }
+    .legend-line.p50 { background: #27AE60; }
+    .legend-line.p85 { background: #3498DB; }
+    .legend-line.p97 { background: #9B59B6; }
+    .legend-line.user { background: #FF6B8A; }
+
+    /* 数据输入区域 */
+    .input-section {
+      background: #fff;
+      border-radius: 20px;
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+    }
+
+    .input-section h3 {
+      color: #555;
+      font-size: 1.1rem;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .input-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .input-group {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .input-group label {
+      font-size: 0.9rem;
+      color: #666;
+      margin-bottom: 6px;
+    }
+
+    .input-group input {
+      padding: 12px 16px;
+      border: 2px solid #eee;
+      border-radius: 12px;
+      font-size: 1rem;
+      transition: all 0.3s ease;
+    }
+
+    .input-group input:focus {
+      outline: none;
+      border-color: #FFB6C1;
+      box-shadow: 0 0 0 3px rgba(255, 182, 193, 0.3);
+    }
+
+    .input-group input::placeholder {
+      color: #bbb;
+    }
+
+    .btn-add {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #FFB6C1 0%, #DDA0DD 100%);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(255, 182, 193, 0.4);
+    }
+
+    .btn-add:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(255, 182, 193, 0.5);
+    }
+
+    /* 数据记录列表 */
+    .data-list {
+      margin-top: 20px;
+    }
+
+    .data-list h4 {
+      color: #666;
+      font-size: 0.95rem;
+      margin-bottom: 12px;
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .data-table th,
+    .data-table td {
+      padding: 10px 12px;
+      text-align: center;
+      border-bottom: 1px solid #eee;
+    }
+
+    .data-table th {
+      background: #f8f9fa;
+      color: #666;
+      font-weight: 600;
+      font-size: 0.85rem;
+    }
+
+    .data-table td {
+      color: #555;
+      font-size: 0.9rem;
+    }
+
+    .data-table tr:hover td {
+      background: #f8f9fa;
+    }
+
+    .btn-delete {
+      background: #ff4444;
+      color: #fff;
+      border: none;
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.75rem;
+      transition: all 0.2s ease;
+    }
+
+    .btn-delete:hover {
+      background: #cc0000;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 30px;
+      color: #999;
+      font-size: 0.95rem;
+    }
+
+    .empty-state .icon {
+      font-size: 3rem;
+      margin-bottom: 10px;
+      opacity: 0.5;
+    }
+
+    /* 百分位结果 */
+    .percentile-result {
+      background: linear-gradient(135deg, #f0f8ff 0%, #fff5f5 100%);
+      border-radius: 16px;
+      padding: 20px;
+      margin-top: 16px;
+    }
+
+    .percentile-result h4 {
+      color: #555;
+      font-size: 0.95rem;
+      margin-bottom: 12px;
+    }
+
+    .percentile-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .percentile-badge {
+      padding: 8px 16px;
+      border-radius: 50px;
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+
+    .percentile-badge.height {
+      background: rgba(74, 144, 217, 0.15);
+      color: #4A90D9;
+    }
+
+    .percentile-badge.weight {
+      background: rgba(255, 107, 138, 0.15);
+      color: #FF6B8A;
+    }
+
+    .percentile-badge.bmi {
+      background: rgba(155, 89, 182, 0.15);
+      color: #9B59B6;
+    }
+
+    /* 底部来源说明 */
+    .footer {
+      text-align: center;
+      padding: 24px;
+      color: #999;
+      font-size: 0.85rem;
+      line-height: 1.6;
+    }
+
+    .footer a {
+      color: #4A90D9;
+      text-decoration: none;
+    }
+
+    .footer a:hover {
+      text-decoration: underline;
+    }
+
+    /* 响应式 */
+    @media (max-width: 600px) {
+      .header h1 {
+        font-size: 1.5rem;
+      }
+
+      .chart-container {
+        height: 220px;
+      }
+
+      .input-row {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* 空数据提示 */
+    .no-data-tip {
+      text-align: center;
+      padding: 40px 20px;
+      color: #999;
+    }
+
+    .no-data-tip .icon {
+      font-size: 2.5rem;
+      margin-bottom: 10px;
+    }
+
+    /* 动画 */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .chart-card {
+      animation: fadeIn 0.4s ease forwards;
+    }
+
+    .chart-card:nth-child(2) { animation-delay: 0.1s; }
+    .chart-card:nth-child(3) { animation-delay: 0.2s; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- 头部 -->
+    <div class="header">
+      <span class="icon-baby">👶</span>
+      <h1>婴儿生长曲线图</h1>
+      <p>0-36个月 身高、体重、BMI追踪</p>
+    </div>
+
+    <!-- 标准切换 -->
+    <div class="standard-switch">
+      <button class="standard-btn who active" onclick="switchStandard('who')">🌍 WHO标准</button>
+      <button class="standard-btn china" onclick="switchStandard('china')">🇨🇳 中国标准</button>
+    </div>
+
+    <!-- 性别选择 -->
+    <div class="gender-select">
+      <label class="gender-option selected" id="boy-option">
+        <input type="radio" name="gender" value="boy" checked onclick="selectGender('boy')">
+        <span class="gender-icon">👦</span>
+        <span>男孩</span>
+      </label>
+      <label class="gender-option" id="girl-option">
+        <input type="radio" name="gender" value="girl" onclick="selectGender('girl')">
+        <span class="gender-icon">👧</span>
+        <span>女孩</span>
+      </label>
+    </div>
+
+    <!-- 身高图表 -->
+    <div class="chart-card height">
+      <h3><span class="icon">📏</span> 身高曲线 (cm)</h3>
+      <div class="chart-container">
+        <canvas id="heightChart"></canvas>
+      </div>
+      <div class="percentile-legend">
+        <div class="legend-item"><div class="legend-line p3"></div><span>3rd百分位</span></div>
+        <div class="legend-item"><div class="legend-line p15"></div><span>15th百分位</span></div>
+        <div class="legend-item"><div class="legend-line p50"></div><span>50th百分位</span></div>
+        <div class="legend-item"><div class="legend-line p85"></div><span>85th百分位</span></div>
+        <div class="legend-item"><div class="legend-line p97"></div><span>97th百分位</span></div>
+        <div class="legend-item"><div class="legend-line user"></div><span>宝宝数据</span></div>
+      </div>
+    </div>
+
+    <!-- 体重图表 -->
+    <div class="chart-card weight">
+      <h3><span class="icon">⚖️</span> 体重曲线 (kg)</h3>
+      <div class="chart-container">
+        <canvas id="weightChart"></canvas>
+      </div>
+      <div class="percentile-legend">
+        <div class="legend-item"><div class="legend-line p3"></div><span>3rd百分位</span></div>
+        <div class="legend-item"><div class="legend-line p15"></div><span>15th百分位</span></div>
+        <div class="legend-item"><div class="legend-line p50"></div><span>50th百分位</span></div>
+        <div class="legend-item"><div class="legend-line p85"></div><span>85th百分位</span></div>
+        <div class="legend-item"><div class="legend-line p97"></div><span>97th百分位</span></div>
+        <div class="legend-item"><div class="legend-line user"></div><span>宝宝数据</span></div>
+      </div>
+    </div>
+
+    <!-- BMI图表 -->
+    <div class="chart-card bmi">
+      <h3><span class="icon">📊</span> BMI曲线</h3>
+      <div class="chart-container">
+        <canvas id="bmiChart"></canvas>
+      </div>
+      <div class="percentile-legend">
+        <div class="legend-item"><div class="legend-line p3"></div><span>3rd百分位</span></div>
+        <div class="legend-item"><div class="legend-line p15"></div><span>15th百分位</span></div>
+        <div class="legend-item"><div class="legend-line p50"></div><span>50th百分位</span></div>
+        <div class="legend-item"><div class="legend-line p85"></div><span>85th百分位</span></div>
+        <div class="legend-item"><div class="legend-line p97"></div><span>97th百分位</span></div>
+        <div class="legend-item"><div class="legend-line user"></div><span>宝宝数据</span></div>
+      </div>
+    </div>
+
+    <!-- 数据输入 -->
+    <div class="input-section">
+      <h3>📝 添加记录</h3>
+      <div class="input-row">
+        <div class="input-group">
+          <label>月龄（个月）</label>
+          <input type="number" id="inputAge" placeholder="例如：6" min="0" max="36" step="0.5">
+        </div>
+        <div class="input-group">
+          <label>身高（cm）</label>
+          <input type="number" id="inputHeight" placeholder="例如：68.5" min="30" max="120" step="0.1">
+        </div>
+        <div class="input-group">
+          <label>体重（kg）</label>
+          <input type="number" id="inputWeight" placeholder="例如：8.5" min="1" max="30" step="0.1">
+        </div>
+      </div>
+      <button class="btn-add" onclick="addData()">✨ 添加记录</button>
+
+      <!-- 数据列表 -->
+      <div class="data-list" id="dataList" style="display:none;">
+        <h4>📋 记录列表</h4>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>月龄</th>
+              <th>身高(cm)</th>
+              <th>体重(kg)</th>
+              <th>BMI</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="dataTableBody"></tbody>
+        </table>
+      </div>
+
+      <!-- 百分位结果 -->
+      <div class="percentile-result" id="percentileResult" style="display:none;">
+        <h4>📈 当前百分位（基于最新记录）</h4>
+        <div class="percentile-badges" id="percentileBadges"></div>
+      </div>
+    </div>
+
+    <!-- 底部说明 -->
+    <div class="footer">
+      <p><strong>数据来源：</strong></p>
+      <p id="standardSource">WHO标准：世界卫生组织(WHO) 2006年发布的0-5岁儿童生长标准</p>
+      <p><a href="http://www.who.int/childgrowth/standards/" target="_blank">http://www.who.int/childgrowth/standards/</a></p>
+      <br>
+      <p>温馨提示：生长曲线仅供参考，如有疑问请咨询儿科医生</p>
+    </div>
+  </div>
+
+  <script src="data/who-standards.js"></script>
+  <script src="data/china-standards.js"></script>
+  <script>
+    // 全局变量
+    let currentStandard = 'who';
+    let currentGender = 'boy';
+    let userData = [];
+    let charts = { height: null, weight: null, bmi: null };
+
+    // 月龄标签
+    const ageLabels = Array.from({length: 37}, (_, i) => i);
+
+    // 初始化图表
+    function initCharts() {
+      const chartOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+          intersect: false,
+          mode: 'index'
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: 'rgba(255,255,255,0.95)',
+            titleColor: '#333',
+            bodyColor: '#666',
+            borderColor: '#eee',
+            borderWidth: 1,
+            padding: 12,
+            displayColors: true,
+            callbacks: {
+              label: function(context) {
+                return context.dataset.label + ': ' + context.parsed.y.toFixed(1);
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            type: 'linear',
+            min: 0,
+            max: 36,
+            title: {
+              display: true,
+              text: '月龄（月）',
+              color: '#999'
+            },
+            ticks: {
+              stepSize: 3,
+              color: '#999'
+            },
+            grid: {
+              color: '#f0f0f0'
+            }
+          },
+          y: {
+            title: {
+              display: true,
+              color: '#999'
+            },
+            ticks: {
+              color: '#999'
+            },
+            grid: {
+              color: '#f0f0f0'
+            }
+          }
+        }
+      };
+
+      // 身高图表
+      const heightCtx = document.getElementById('heightChart').getContext('2d');
+      charts.height = new Chart(heightCtx, {
+        type: 'line',
+        data: getHeightData(),
+        options: {
+          ...chartOptions,
+          scales: {
+            ...chartOptions.scales,
+            y: {
+              ...chartOptions.scales.y,
+              title: { display: true, text: '身高 (cm)', color: '#4A90D9' }
+            }
+          }
+        }
+      });
+
+      // 体重图表
+      const weightCtx = document.getElementById('weightChart').getContext('2d');
+      charts.weight = new Chart(weightCtx, {
+        type: 'line',
+        data: getWeightData(),
+        options: {
+          ...chartOptions,
+          scales: {
+            ...chartOptions.scales,
+            y: {
+              ...chartOptions.scales.y,
+              title: { display: true, text: '体重 (kg)', color: '#FF6B8A' }
+            }
+          }
+        }
+      });
+
+      // BMI图表
+      const bmiCtx = document.getElementById('bmiChart').getContext('2d');
+      charts.bmi = new Chart(bmiCtx, {
+        type: 'line',
+        data: getBmiData(),
+        options: {
+          ...chartOptions,
+          scales: {
+            ...chartOptions.scales,
+            y: {
+              ...chartOptions.scales.y,
+              title: { display: true, text: 'BMI', color: '#9B59B6' }
+            }
+          }
+        }
+      });
+    }
+
+    // 获取当前标准数据
+    function getCurrentStandard() {
+      return currentStandard === 'who' ? WHOStandards : ChinaStandards;
+    }
+
+    // 获取身高数据
+    function getHeightData() {
+      const std = getCurrentStandard();
+      const genderData = currentGender === 'boy' ? std.heightBoys : std.heightGirls;
+
+      return {
+        datasets: [
+          {
+            label: '3rd百分位',
+            data: std.ageMonths.map((age, i) => ({ x: age, y: genderData.p3[i] })),
+            borderColor: '#E74C3C',
+            borderWidth: 1.5,
+            borderDash: [5, 5],
+            fill: false,
+            tension: 0.3,
+            pointRadius: 0
+          },
+          {
+            label: '15th百分位',
+            data: std.ageMonths.map((age, i) => ({ x: age, y: genderData.p15[i] })),
+            borderColor: '#F39C12',
+            borderWidth: 1.5,
+            fill: false,
+            tension: 0.3,
+            pointRadius: 0
+          },
+          {
+            label: '50th百分位',
+            data: std.ageMonths.map((age, i) => ({ x: age, y: genderData.p50[i] })),
+            borderColor: '#27AE60',
+            borderWidth: 2,
+            fill: false,
+            tension: 0.3,
+            pointRadius: 0
+          },
+          {
+            label: '85th百分位',
+            data: std.ageMonths.map((age, i) => ({ x: age, y: genderData.p85[i] })),
+            borderColor: '#3498DB',
+            borderWidth: 1.5,
+            fill: false,
+            tension: 0.3,
+            pointRadius: 0
+          },
+          {
+            label: '97th百分位',
+            data: std.ageMonths.map((age, i) => ({ x: age, y: genderData.p97[i] })),
+            borderColor: '#9B59B6',
+            borderWidth: 1.5,
+            borderDash: [5, 5],
+            fill: false,
+            tension: 0.3,
+            pointRadius: 0
+          },
+          {
+            label: '宝宝身高',
+            data: userData.map(d => ({ x: d.age, y: d.height })),
+            borderColor: '#FF6B8A',
+            backgroundColor: '#FF6B8A',
+            borderWidth: 3,
+            fill: false,
+            tension: 0.1,
+            pointRadius: 6,
+            pointHoverRadius: 8,
+            showLine: true
+          }
+        ]
+      };
+    }
+
+    // 获取体重数据
+    function getWeightData() {
+      const std = getCurrentStandard();
+      const genderData = currentGender === 'boy' ? std.weightBoys : std.weightGirls;
+
+      return {
+        datasets: [
+          {
+            label: '3rd百分位',
+            data: std.ageMonths.map((age, i) => ({ x: age, y: genderData.p3[i] })),
+            borderColor: '#E74C3C',
+            borderWidth: 1.5,
+            borderDash: [5, 5],
+            fill: false,
+            tension: 0.3,
+            pointRadius: 0
+          },
+          {
+            label: '15th百分位',
+            data: std.ageMonths.map((age, i) => ({ x: age, y: genderData.p15[i] })),
+            borderColor: '#F39C12',
+            borderWidth: 1.5,
+            fill: false,
+            tension: 0.3,
+            pointRadius: 0
+          },
+          {
+            label: '50th百分位',
+            data: std.ageMonths.map((age, i) => ({ x: age, y: genderData.p50[i] })),
+            borderColor: '#27AE60',
+            borderWidth: 2,
+            fill: false,
+            tension: 0.3,
+            pointRadius: 0
+          },
+          {
+            label: '85th百分位',
+            data: std.ageMonths.map((age, i) => ({ x: age, y: genderData.p85[i] })),
+            borderColor: '#3498DB',
+            borderWidth: 1.5,
+            fill: false,
+            tension: 0.3,
+            pointRadius: 0
+          },
+          {
+            label: '97th百分位',
+            data: std.ageMonths.map((age, i) => ({ x: age, y: genderData.p97[i] })),
+            borderColor: '#9B59B6',
+            borderWidth: 1.5,
+            borderDash: [5, 5],
+            fill: false,
+            tension: 0.3,
+            pointRadius: 0
+          },
+          {
+            label: '宝宝体重',
+            data: userData.map(d => ({ x: d.age, y: d.weight })),
+            borderColor: '#FF6B8A',
+            backgroundColor: '#FF6B8A',
+            borderWidth: 3,
+            fill: false,
+            tension: 0.1,
+            pointRadius: 6,
+            pointHoverRadius: 8,
+            showLine: true
+          }
+        ]
+      };
+    }
+
+    // 获取BMI数据
+    function getBmiData() {
+      const std = getCurrentStandard();
+      const genderData = currentGender === 'boy' ? std.bmiBoys : std.bmiGirls;
+
+      return {
+        datasets: [
+          {
+            label: '3rd百分位',
+            data: std.ageMonths.map((age, i) => ({ x: age, y: genderData.p3[i] })),
+            borderColor: '#E74C3C',
+            borderWidth: 1.5,
+            borderDash: [5, 5],
+            fill: false,
+            tension: 0.3,
+            pointRadius: 0
+          },
+          {
+            label: '15th百分位',
+            data: std.ageMonths.map((age, i) => ({ x: age, y: genderData.p15[i] })),
+            borderColor: '#F39C12',
+            borderWidth: 1.5,
+            fill: false,
+            tension: 0.3,
+            pointRadius: 0
+          },
+          {
+            label: '50th百分位',
+            data: std.ageMonths.map((age, i) => ({ x: age, y: genderData.p50[i] })),
+            borderColor: '#27AE60',
+            borderWidth: 2,
+            fill: false,
+            tension: 0.3,
+            pointRadius: 0
+          },
+          {
+            label: '85th百分位',
+            data: std.ageMonths.map((age, i) => ({ x: age, y: genderData.p85[i] })),
+            borderColor: '#3498DB',
+            borderWidth: 1.5,
+            fill: false,
+            tension: 0.3,
+            pointRadius: 0
+          },
+          {
+            label: '97th百分位',
+            data: std.ageMonths.map((age, i) => ({ x: age, y: genderData.p97[i] })),
+            borderColor: '#9B59B6',
+            borderWidth: 1.5,
+            borderDash: [5, 5],
+            fill: false,
+            tension: 0.3,
+            pointRadius: 0
+          },
+          {
+            label: '宝宝BMI',
+            data: userData.map(d => ({ x: d.age, y: d.bmi })),
+            borderColor: '#FF6B8A',
+            backgroundColor: '#FF6B8A',
+            borderWidth: 3,
+            fill: false,
+            tension: 0.1,
+            pointRadius: 6,
+            pointHoverRadius: 8,
+            showLine: true
+          }
+        ]
+      };
+    }
+
+    // 更新图表
+    function updateCharts() {
+      if (charts.height) {
+        charts.height.data = getHeightData();
+        charts.height.update();
+      }
+      if (charts.weight) {
+        charts.weight.data = getWeightData();
+        charts.weight.update();
+      }
+      if (charts.bmi) {
+        charts.bmi.data = getBmiData();
+        charts.bmi.update();
+      }
+    }
+
+    // 切换标准
+    function switchStandard(standard) {
+      currentStandard = standard;
+      document.querySelector('.standard-btn.who').classList.toggle('active', standard === 'who');
+      document.querySelector('.standard-btn.china').classList.toggle('active', standard === 'china');
+
+      // 更新来源说明
+      if (standard === 'who') {
+        document.getElementById('standardSource').textContent = 'WHO标准：世界卫生组织(WHO) 2006年发布的0-5岁儿童生长标准';
+      } else {
+        document.getElementById('standardSource').textContent = '中国标准：中国卫健委2009年发布的《中国7岁以下儿童生长发育参照标准》';
+      }
+
+      updateCharts();
+      updatePercentileResult();
+    }
+
+    // 选择性别
+    function selectGender(gender) {
+      currentGender = gender;
+      document.getElementById('boy-option').classList.toggle('selected', gender === 'boy');
+      document.getElementById('girl-option').classList.toggle('selected', gender === 'girl');
+      updateCharts();
+      updatePercentileResult();
+    }
+
+    // 添加数据
+    function addData() {
+      const age = parseFloat(document.getElementById('inputAge').value);
+      const height = parseFloat(document.getElementById('inputHeight').value);
+      const weight = parseFloat(document.getElementById('inputWeight').value);
+
+      if (isNaN(age) || isNaN(height) || isNaN(weight)) {
+        alert('请填写完整的月龄、身高和体重信息');
+        return;
+      }
+
+      if (age < 0 || age > 36) {
+        alert('月龄必须在0-36个月之间');
+        return;
+      }
+
+      const bmi = (weight / Math.pow(height / 100, 2)).toFixed(1);
+
+      userData.push({ age, height, weight, bmi: parseFloat(bmi) });
+      userData.sort((a, b) => a.age - b.age);
+
+      // 清空输入
+      document.getElementById('inputAge').value = '';
+      document.getElementById('inputHeight').value = '';
+      document.getElementById('inputWeight').value = '';
+
+      updateCharts();
+      updateDataList();
+      updatePercentileResult();
+    }
+
+    // 删除数据
+    function deleteData(index) {
+      userData.splice(index, 1);
+      updateCharts();
+      updateDataList();
+      updatePercentileResult();
+    }
+
+    // 更新数据列表
+    function updateDataList() {
+      const dataList = document.getElementById('dataList');
+      const tbody = document.getElementById('dataTableBody');
+
+      if (userData.length === 0) {
+        dataList.style.display = 'none';
+        return;
+      }
+
+      dataList.style.display = 'block';
+      tbody.innerHTML = userData.map((d, i) => `
+        <tr>
+          <td>${d.age}</td>
+          <td>${d.height}</td>
+          <td>${d.weight}</td>
+          <td>${d.bmi}</td>
+          <td><button class="btn-delete" onclick="deleteData(${i})">删除</button></td>
+        </tr>
+      `).join('');
+    }
+
+    // 计算百分位
+    function calculatePercentile(value, p3, p15, p50, p85, p97) {
+      if (value <= p3) return '低于3rd（偏低）';
+      if (value <= p15) return '3rd-15th之间';
+      if (value <= p50) return '15th-50th之间';
+      if (value <= p85) return '50th-85th之间（正常）';
+      if (value <= p97) return '85th-97th之间';
+      return '高于97th（偏高）';
+    }
+
+    // 更新百分位结果
+    function updatePercentileResult() {
+      const resultDiv = document.getElementById('percentileResult');
+      const badgesDiv = document.getElementById('percentileBadges');
+
+      if (userData.length === 0) {
+        resultDiv.style.display = 'none';
+        return;
+      }
+
+      const latest = userData[userData.length - 1];
+      const std = getCurrentStandard();
+      const ageIndex = Math.round(latest.age);
+
+      if (ageIndex < 0 || ageIndex >= std.ageMonths.length) {
+        resultDiv.style.display = 'none';
+        return;
+      }
+
+      const genderKey = currentGender === 'boy' ? 'Boys' : 'Girls';
+
+      const heightPercentile = calculatePercentile(
+        latest.height,
+        std.heightBoys[`p3`][ageIndex],
+        std.heightBoys[`p15`][ageIndex],
+        std.heightBoys[`p50`][ageIndex],
+        std.heightBoys[`p85`][ageIndex],
+        std.heightBoys[`p97`][ageIndex]
+      );
+
+      const weightPercentile = calculatePercentile(
+        latest.weight,
+        std.weightBoys[`p3`][ageIndex],
+        std.weightBoys[`p15`][ageIndex],
+        std.weightBoys[`p50`][ageIndex],
+        std.weightBoys[`p85`][ageIndex],
+        std.weightBoys[`p97`][ageIndex]
+      );
+
+      const bmiPercentile = calculatePercentile(
+        latest.bmi,
+        std.bmiBoys[`p3`][ageIndex],
+        std.bmiBoys[`p15`][ageIndex],
+        std.bmiBoys[`p50`][ageIndex],
+        std.bmiBoys[`p85`][ageIndex],
+        std.bmiBoys[`p97`][ageIndex]
+      );
+
+      badgesDiv.innerHTML = `
+        <span class="percentile-badge height">📏 身高: ${heightPercentile}</span>
+        <span class="percentile-badge weight">⚖️ 体重: ${weightPercentile}</span>
+        <span class="percentile-badge bmi">📊 BMI: ${bmiPercentile}</span>
+      `;
+
+      resultDiv.style.display = 'block';
+    }
+
+    // 页面加载完成后初始化
+    document.addEventListener('DOMContentLoaded', initCharts);
+  </script>
+</body>
+</html>
