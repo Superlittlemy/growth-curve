@@ -5,6 +5,92 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>婴儿生长曲线图 - 0-24个月</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    // 自定义插件：在数据点旁边绘制百分位/Z值标签
+    const datalabelsPlugin = {
+      id: 'babyDataLabels',
+      afterDatasetsDraw: function(chart) {
+        const ctx = chart.ctx;
+
+        chart.data.datasets.forEach(function(dataset, datasetIndex) {
+          // 只在"宝宝"数据集上绘制标签
+          if (!dataset.label || !dataset.label.includes('宝宝')) return;
+          if (dataset.data.length === 0) return;
+
+          const meta = chart.getDatasetMeta(datasetIndex);
+          if (meta.hidden) return;
+
+          meta.data.forEach(function(point, index) {
+            const value = dataset.data[index].y;
+            const age = Math.round(dataset.data[index].x);
+            const std = getCurrentStandard();
+            let label = '';
+
+            // 根据指标类型获取正确的性别数据
+            let genderData;
+            if (dataset.label.includes('身高')) {
+              genderData = currentGender === 'boy' ? std.heightBoys : std.heightGirls;
+            } else if (dataset.label.includes('体重')) {
+              genderData = currentGender === 'boy' ? std.weightBoys : std.weightGirls;
+            } else {
+              genderData = currentGender === 'boy' ? std.bmiBoys : std.bmiGirls;
+            }
+
+            if (currentStandard === 'china') {
+              const data = getChinaData(genderData, age);
+              // 计算实际百分位数（线性插值）
+              let percentile;
+              if (value <= data.p3) {
+                percentile = (value / data.p3) * 3;
+              } else if (value <= data.p10) {
+                percentile = 3 + (value - data.p3) / (data.p10 - data.p3) * 7;
+              } else if (value <= data.p25) {
+                percentile = 10 + (value - data.p10) / (data.p25 - data.p10) * 15;
+              } else if (value <= data.p50) {
+                percentile = 25 + (value - data.p25) / (data.p50 - data.p25) * 25;
+              } else if (value <= data.p75) {
+                percentile = 50 + (value - data.p50) / (data.p75 - data.p50) * 25;
+              } else if (value <= data.p90) {
+                percentile = 75 + (value - data.p75) / (data.p90 - data.p75) * 15;
+              } else if (value <= data.p97) {
+                percentile = 90 + (value - data.p90) / (data.p97 - data.p90) * 7;
+              } else {
+                percentile = 97 + (value - data.p97) / data.p97 * 3;
+              }
+              label = percentile.toFixed(0) + '%';
+            } else {
+              const whoData = genderData.data[age];
+              const z = ((value / whoData[1]) - 1) / whoData[2];
+              label = (z >= 0 ? '+' : '') + z.toFixed(2) + 'SD';
+            }
+
+            // 绘制标签
+            const x = point.x;
+            const y = point.y - 15;
+
+            ctx.save();
+            ctx.font = 'bold 11px sans-serif';
+            ctx.fillStyle = '#FF6B8A';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+
+            // 文字背景
+            const textWidth = ctx.measureText(label).width;
+            ctx.fillStyle = 'rgba(255,255,255,0.8)';
+            ctx.fillRect(x - textWidth/2 - 3, y - 12, textWidth + 6, 14);
+
+            // 文字
+            ctx.fillStyle = '#FF6B8A';
+            ctx.fillText(label, x, y);
+            ctx.restore();
+          });
+        });
+      }
+    };
+
+    // 注册插件
+    Chart.register(datalabelsPlugin);
+  </script>
   <style>
     * {
       margin: 0;
@@ -73,12 +159,19 @@
       display: block;
     }
 
+    /* 顶部工具栏 */
+    .top-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding: 0 10px;
+    }
+
     /* 标准切换按钮 */
     .standard-switch {
       display: flex;
-      justify-content: center;
       gap: 12px;
-      margin-bottom: 24px;
     }
 
     .standard-btn {
@@ -122,9 +215,7 @@
     /* 性别选择 */
     .gender-select {
       display: flex;
-      justify-content: center;
       gap: 20px;
-      margin-bottom: 24px;
     }
 
     .gender-option {
@@ -188,6 +279,37 @@
     .chart-card.weight h3 { color: #FF6B8A; }
     .chart-card.bmi h3 { color: #9B59B6; }
 
+    /* 图表标题 */
+    .chart-card h3 {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* 图表类型切换 tabs */
+    .chart-tabs {
+      display: flex;
+      gap: 6px;
+    }
+    .chart-tab {
+      padding: 6px 14px;
+      border: 2px solid #eee;
+      border-radius: 20px;
+      background: #fff;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .chart-tab:hover { border-color: #FFB6C1; }
+    .chart-tab[data-type="height"].active { background: #4A90D9; border-color: #4A90D9; }
+    .chart-tab[data-type="weight"].active { background: #FF6B8A; border-color: #FF6B8A; }
+    .chart-tab[data-type="bmi"].active { background: #9B59B6; border-color: #9B59B6; }
+
+    /* 隐藏非活动的图表 */
+    .chart-card { display: none; }
+    .chart-card.height.active, .chart-card.weight.active, .chart-card.bmi.active { display: block; }
+
     .chart-container {
       position: relative;
       height: 280px;
@@ -220,6 +342,7 @@
 
     /* 中国标准百分位 (从高到低排列，颜色与图表一致) */
     .legend-line.p97 { background: #8E44AD; }
+    .legend-line.p90 { background: #9B59B6; }
     .legend-line.p75 { background: #3498DB; }
     .legend-line.p50 { background: #27AE60; }
     .legend-line.p25 { background: #F1C40F; }
@@ -486,34 +609,44 @@
       <p>0-24个月 身高、体重、BMI追踪</p>
     </div>
 
-    <!-- 标准切换 -->
-    <div class="standard-switch">
-      <button class="standard-btn who active" onclick="switchStandard('who')">🌍 WHO标准</button>
-      <button class="standard-btn china" onclick="switchStandard('china')">🇨🇳 中国标准</button>
-    </div>
-
-    <!-- 性别选择 -->
-    <div class="gender-select">
-      <label class="gender-option selected" id="boy-option">
-        <input type="radio" name="gender" value="boy" checked onclick="selectGender('boy')">
-        <span class="gender-icon">👦</span>
-        <span>男孩</span>
-      </label>
-      <label class="gender-option" id="girl-option">
-        <input type="radio" name="gender" value="girl" onclick="selectGender('girl')">
-        <span class="gender-icon">👧</span>
-        <span>女孩</span>
-      </label>
+    <!-- 顶部工具栏 -->
+    <div class="top-toolbar">
+      <!-- 标准切换 -->
+      <div class="standard-switch">
+        <button class="standard-btn china active" onclick="switchStandard('china')">🇨🇳 中国标准</button>
+        <button class="standard-btn who" onclick="switchStandard('who')">🌍 WHO标准</button>
+      </div>
+      <!-- 性别选择 -->
+      <div class="gender-select">
+        <label class="gender-option selected" id="boy-option">
+          <input type="radio" name="gender" value="boy" checked onclick="selectGender('boy')">
+          <span class="gender-icon">👦</span>
+          <span>男孩</span>
+        </label>
+        <label class="gender-option" id="girl-option">
+          <input type="radio" name="gender" value="girl" onclick="selectGender('girl')">
+          <span class="gender-icon">👧</span>
+          <span>女孩</span>
+        </label>
+      </div>
     </div>
 
     <!-- 身高图表 -->
-    <div class="chart-card height">
-      <h3><span class="icon">📏</span> 身高曲线 (cm)</h3>
+    <div class="chart-card height active">
+      <h3>
+        <span class="icon">📏</span> 身高曲线 (cm)
+        <span class="chart-tabs">
+          <button class="chart-tab active" data-type="height" onclick="switchChart('height')">📏 身高</button>
+          <button class="chart-tab" data-type="weight" onclick="switchChart('weight')">⚖️ 体重</button>
+          <button class="chart-tab" data-type="bmi" onclick="switchChart('bmi')">📊 BMI</button>
+        </span>
+      </h3>
       <div class="chart-container">
         <canvas id="heightChart"></canvas>
       </div>
       <div class="percentile-legend" id="chartLegend">
         <div class="legend-item"><div class="legend-line p97"></div><span>P97</span></div>
+        <div class="legend-item"><div class="legend-line p90"></div><span>P90</span></div>
         <div class="legend-item"><div class="legend-line p75"></div><span>P75</span></div>
         <div class="legend-item"><div class="legend-line p50"></div><span>P50</span></div>
         <div class="legend-item"><div class="legend-line p25"></div><span>P25</span></div>
@@ -525,12 +658,20 @@
 
     <!-- 体重图表 -->
     <div class="chart-card weight">
-      <h3><span class="icon">⚖️</span> 体重曲线 (kg)</h3>
+      <h3>
+        <span class="icon">⚖️</span> 体重曲线 (kg)
+        <span class="chart-tabs">
+          <button class="chart-tab" data-type="height" onclick="switchChart('height')">📏 身高</button>
+          <button class="chart-tab active" data-type="weight" onclick="switchChart('weight')">⚖️ 体重</button>
+          <button class="chart-tab" data-type="bmi" onclick="switchChart('bmi')">📊 BMI</button>
+        </span>
+      </h3>
       <div class="chart-container">
         <canvas id="weightChart"></canvas>
       </div>
       <div class="percentile-legend">
         <div class="legend-item"><div class="legend-line p97"></div><span>P97</span></div>
+        <div class="legend-item"><div class="legend-line p90"></div><span>P90</span></div>
         <div class="legend-item"><div class="legend-line p75"></div><span>P75</span></div>
         <div class="legend-item"><div class="legend-line p50"></div><span>P50</span></div>
         <div class="legend-item"><div class="legend-line p25"></div><span>P25</span></div>
@@ -542,12 +683,20 @@
 
     <!-- BMI图表 -->
     <div class="chart-card bmi">
-      <h3><span class="icon">📊</span> BMI曲线</h3>
+      <h3>
+        <span class="icon">📊</span> BMI曲线
+        <span class="chart-tabs">
+          <button class="chart-tab" data-type="height" onclick="switchChart('height')">📏 身高</button>
+          <button class="chart-tab" data-type="weight" onclick="switchChart('weight')">⚖️ 体重</button>
+          <button class="chart-tab active" data-type="bmi" onclick="switchChart('bmi')">📊 BMI</button>
+        </span>
+      </h3>
       <div class="chart-container">
         <canvas id="bmiChart"></canvas>
       </div>
       <div class="percentile-legend">
         <div class="legend-item"><div class="legend-line p97"></div><span>P97</span></div>
+        <div class="legend-item"><div class="legend-line p90"></div><span>P90</span></div>
         <div class="legend-item"><div class="legend-line p75"></div><span>P75</span></div>
         <div class="legend-item"><div class="legend-line p50"></div><span>P50</span></div>
         <div class="legend-item"><div class="legend-line p25"></div><span>P25</span></div>
@@ -595,7 +744,7 @@
 
       <!-- 百分位结果 -->
       <div class="percentile-result" id="percentileResult" style="display:none;">
-        <h4>📈 当前百分位（基于最新记录）</h4>
+        <h4 id="percentileHeading">📈 当前百分位（基于最新记录）</h4>
         <div class="percentile-badges" id="percentileBadges"></div>
       </div>
     </div>
@@ -614,7 +763,7 @@
   <script src="data/china-standards.js"></script>
   <script>
     // 全局变量
-    let currentStandard = 'who';
+    let currentStandard = 'china';
     let currentGender = 'boy';
     let userData = [];
     let charts = { height: null, weight: null, bmi: null };
@@ -638,7 +787,12 @@
             borderWidth: 1,
             padding: 12,
             displayColors: true,
+            filter: function(tooltipItem) {
+              // Show all data in tooltip (no filtering)
+              return true;
+            },
             itemSort: function(a, b) {
+              // Sort by Y value descending (highest first)
               return b.parsed.y - a.parsed.y;
             },
             callbacks: {
@@ -764,68 +918,48 @@
         // 中国标准: P3, P10, P25, P50, P75, P90, P97
         datasets = [
           {
-            label: 'P3 (3rd)',
-            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p3 })),
-            borderColor: '#E74C3C', borderWidth: 1.5, borderDash: [5, 5], fill: false, tension: 0.3, pointRadius: 0
+            label: 'P97',
+            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p97 })),
+            borderColor: '#8E44AD', borderWidth: 1.5, borderDash: [5, 5], fill: false, tension: 0.3, pointRadius: 0
           },
           {
-            label: 'P10 (10th)',
-            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p10 })),
-            borderColor: '#F39C12', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
+            label: 'P90',
+            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p90 })),
+            borderColor: '#9B59B6', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
           },
           {
-            label: 'P25 (25th)',
-            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p25 })),
-            borderColor: '#F1C40F', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
+            label: 'P75',
+            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p75 })),
+            borderColor: '#3498DB', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
           },
           {
-            label: 'P50 (50th)',
+            label: 'P50',
             data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p50 })),
             borderColor: '#27AE60', borderWidth: 2.5, fill: false, tension: 0.3, pointRadius: 0
           },
           {
-            label: 'P75 (75th)',
-            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p75 })),
+            label: 'P25',
+            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p25 })),
             borderColor: '#F1C40F', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
           },
           {
-            label: 'P90 (90th)',
-            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p90 })),
+            label: 'P10',
+            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p10 })),
             borderColor: '#F39C12', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
           },
           {
-            label: 'P97 (97th)',
-            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p97 })),
-            borderColor: '#9B59B6', borderWidth: 1.5, borderDash: [5, 5], fill: false, tension: 0.3, pointRadius: 0
+            label: 'P3',
+            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p3 })),
+            borderColor: '#E74C3C', borderWidth: 1.5, borderDash: [5, 5], fill: false, tension: 0.3, pointRadius: 0
           }
         ];
       } else {
-        // WHO标准: -3SD, -2SD, -1SD, Median, +1SD, +2SD, +3SD
+        // WHO标准: +3SD, +2SD, +1SD, Median, -1SD, -2SD, -3SD (从高到低)
         datasets = [
           {
-            label: '-3SD',
-            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).n3 })),
-            borderColor: '#E74C3C', borderWidth: 1.5, borderDash: [5, 5], fill: false, tension: 0.3, pointRadius: 0
-          },
-          {
-            label: '-2SD',
-            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).n2 })),
-            borderColor: '#E67E22', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
-          },
-          {
-            label: '-1SD',
-            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).n1 })),
-            borderColor: '#F39C12', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
-          },
-          {
-            label: 'Median',
-            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).median })),
-            borderColor: '#27AE60', borderWidth: 2.5, fill: false, tension: 0.3, pointRadius: 0
-          },
-          {
-            label: '+1SD',
-            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).p1 })),
-            borderColor: '#F39C12', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
+            label: '+3SD',
+            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).p3 })),
+            borderColor: '#9B59B6', borderWidth: 1.5, borderDash: [5, 5], fill: false, tension: 0.3, pointRadius: 0
           },
           {
             label: '+2SD',
@@ -833,9 +967,29 @@
             borderColor: '#E67E22', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
           },
           {
-            label: '+3SD',
-            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).p3 })),
-            borderColor: '#9B59B6', borderWidth: 1.5, borderDash: [5, 5], fill: false, tension: 0.3, pointRadius: 0
+            label: '+1SD',
+            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).p1 })),
+            borderColor: '#3498DB', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
+          },
+          {
+            label: 'Median',
+            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).median })),
+            borderColor: '#27AE60', borderWidth: 2.5, fill: false, tension: 0.3, pointRadius: 0
+          },
+          {
+            label: '-1SD',
+            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).n1 })),
+            borderColor: '#F39C12', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
+          },
+          {
+            label: '-2SD',
+            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).n2 })),
+            borderColor: '#E67E22', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
+          },
+          {
+            label: '-3SD',
+            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).n3 })),
+            borderColor: '#E74C3C', borderWidth: 1.5, borderDash: [5, 5], fill: false, tension: 0.3, pointRadius: 0
           }
         ];
       }
@@ -860,67 +1014,48 @@
       if (currentStandard === 'china') {
         datasets = [
           {
-            label: 'P3 (3rd)',
-            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p3 })),
-            borderColor: '#E74C3C', borderWidth: 1.5, borderDash: [5, 5], fill: false, tension: 0.3, pointRadius: 0
+            label: 'P97',
+            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p97 })),
+            borderColor: '#8E44AD', borderWidth: 1.5, borderDash: [5, 5], fill: false, tension: 0.3, pointRadius: 0
           },
           {
-            label: 'P10 (10th)',
-            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p10 })),
-            borderColor: '#F39C12', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
+            label: 'P90',
+            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p90 })),
+            borderColor: '#9B59B6', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
           },
           {
-            label: 'P25 (25th)',
-            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p25 })),
-            borderColor: '#F1C40F', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
+            label: 'P75',
+            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p75 })),
+            borderColor: '#3498DB', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
           },
           {
-            label: 'P50 (50th)',
+            label: 'P50',
             data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p50 })),
             borderColor: '#27AE60', borderWidth: 2.5, fill: false, tension: 0.3, pointRadius: 0
           },
           {
-            label: 'P75 (75th)',
-            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p75 })),
+            label: 'P25',
+            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p25 })),
             borderColor: '#F1C40F', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
           },
           {
-            label: 'P90 (90th)',
-            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p90 })),
+            label: 'P10',
+            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p10 })),
             borderColor: '#F39C12', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
           },
           {
-            label: 'P97 (97th)',
-            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p97 })),
-            borderColor: '#9B59B6', borderWidth: 1.5, borderDash: [5, 5], fill: false, tension: 0.3, pointRadius: 0
+            label: 'P3',
+            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p3 })),
+            borderColor: '#E74C3C', borderWidth: 1.5, borderDash: [5, 5], fill: false, tension: 0.3, pointRadius: 0
           }
         ];
       } else {
+        // WHO标准: +3SD, +2SD, +1SD, Median, -1SD, -2SD, -3SD (从高到低)
         datasets = [
           {
-            label: '-3SD',
-            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).n3 })),
-            borderColor: '#E74C3C', borderWidth: 1.5, borderDash: [5, 5], fill: false, tension: 0.3, pointRadius: 0
-          },
-          {
-            label: '-2SD',
-            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).n2 })),
-            borderColor: '#E67E22', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
-          },
-          {
-            label: '-1SD',
-            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).n1 })),
-            borderColor: '#F39C12', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
-          },
-          {
-            label: 'Median',
-            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).median })),
-            borderColor: '#27AE60', borderWidth: 2.5, fill: false, tension: 0.3, pointRadius: 0
-          },
-          {
-            label: '+1SD',
-            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).p1 })),
-            borderColor: '#F39C12', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
+            label: '+3SD',
+            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).p3 })),
+            borderColor: '#9B59B6', borderWidth: 1.5, borderDash: [5, 5], fill: false, tension: 0.3, pointRadius: 0
           },
           {
             label: '+2SD',
@@ -928,9 +1063,29 @@
             borderColor: '#E67E22', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
           },
           {
-            label: '+3SD',
-            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).p3 })),
-            borderColor: '#9B59B6', borderWidth: 1.5, borderDash: [5, 5], fill: false, tension: 0.3, pointRadius: 0
+            label: '+1SD',
+            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).p1 })),
+            borderColor: '#3498DB', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
+          },
+          {
+            label: 'Median',
+            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).median })),
+            borderColor: '#27AE60', borderWidth: 2.5, fill: false, tension: 0.3, pointRadius: 0
+          },
+          {
+            label: '-1SD',
+            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).n1 })),
+            borderColor: '#F39C12', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
+          },
+          {
+            label: '-2SD',
+            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).n2 })),
+            borderColor: '#E67E22', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
+          },
+          {
+            label: '-3SD',
+            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).n3 })),
+            borderColor: '#E74C3C', borderWidth: 1.5, borderDash: [5, 5], fill: false, tension: 0.3, pointRadius: 0
           }
         ];
       }
@@ -954,67 +1109,48 @@
       if (currentStandard === 'china') {
         datasets = [
           {
-            label: 'P3 (3rd)',
-            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p3 })),
-            borderColor: '#E74C3C', borderWidth: 1.5, borderDash: [5, 5], fill: false, tension: 0.3, pointRadius: 0
+            label: 'P97',
+            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p97 })),
+            borderColor: '#8E44AD', borderWidth: 1.5, borderDash: [5, 5], fill: false, tension: 0.3, pointRadius: 0
           },
           {
-            label: 'P10 (10th)',
-            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p10 })),
-            borderColor: '#F39C12', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
+            label: 'P90',
+            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p90 })),
+            borderColor: '#9B59B6', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
           },
           {
-            label: 'P25 (25th)',
-            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p25 })),
-            borderColor: '#F1C40F', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
+            label: 'P75',
+            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p75 })),
+            borderColor: '#3498DB', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
           },
           {
-            label: 'P50 (50th)',
+            label: 'P50',
             data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p50 })),
             borderColor: '#27AE60', borderWidth: 2.5, fill: false, tension: 0.3, pointRadius: 0
           },
           {
-            label: 'P75 (75th)',
-            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p75 })),
+            label: 'P25',
+            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p25 })),
             borderColor: '#F1C40F', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
           },
           {
-            label: 'P90 (90th)',
-            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p90 })),
+            label: 'P10',
+            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p10 })),
             borderColor: '#F39C12', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
           },
           {
-            label: 'P97 (97th)',
-            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p97 })),
-            borderColor: '#9B59B6', borderWidth: 1.5, borderDash: [5, 5], fill: false, tension: 0.3, pointRadius: 0
+            label: 'P3',
+            data: std.ageMonths.map(age => ({ x: age, y: getChinaData(genderData, age).p3 })),
+            borderColor: '#E74C3C', borderWidth: 1.5, borderDash: [5, 5], fill: false, tension: 0.3, pointRadius: 0
           }
         ];
       } else {
+        // WHO标准: +3SD, +2SD, +1SD, Median, -1SD, -2SD, -3SD (从高到低)
         datasets = [
           {
-            label: '-3SD',
-            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).n3 })),
-            borderColor: '#E74C3C', borderWidth: 1.5, borderDash: [5, 5], fill: false, tension: 0.3, pointRadius: 0
-          },
-          {
-            label: '-2SD',
-            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).n2 })),
-            borderColor: '#E67E22', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
-          },
-          {
-            label: '-1SD',
-            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).n1 })),
-            borderColor: '#F39C12', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
-          },
-          {
-            label: 'Median',
-            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).median })),
-            borderColor: '#27AE60', borderWidth: 2.5, fill: false, tension: 0.3, pointRadius: 0
-          },
-          {
-            label: '+1SD',
-            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).p1 })),
-            borderColor: '#F39C12', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
+            label: '+3SD',
+            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).p3 })),
+            borderColor: '#9B59B6', borderWidth: 1.5, borderDash: [5, 5], fill: false, tension: 0.3, pointRadius: 0
           },
           {
             label: '+2SD',
@@ -1022,9 +1158,29 @@
             borderColor: '#E67E22', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
           },
           {
-            label: '+3SD',
-            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).p3 })),
-            borderColor: '#9B59B6', borderWidth: 1.5, borderDash: [5, 5], fill: false, tension: 0.3, pointRadius: 0
+            label: '+1SD',
+            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).p1 })),
+            borderColor: '#3498DB', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
+          },
+          {
+            label: 'Median',
+            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).median })),
+            borderColor: '#27AE60', borderWidth: 2.5, fill: false, tension: 0.3, pointRadius: 0
+          },
+          {
+            label: '-1SD',
+            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).n1 })),
+            borderColor: '#F39C12', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
+          },
+          {
+            label: '-2SD',
+            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).n2 })),
+            borderColor: '#E67E22', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0
+          },
+          {
+            label: '-3SD',
+            data: std.ageMonths.map(age => ({ x: age, y: getWHOData(genderData, age).n3 })),
+            borderColor: '#E74C3C', borderWidth: 1.5, borderDash: [5, 5], fill: false, tension: 0.3, pointRadius: 0
           }
         ];
       }
@@ -1060,9 +1216,9 @@
       const legendItems = document.querySelectorAll('.percentile-legend .legend-item');
 
       if (currentStandard === 'china') {
-        // 中国标准: P97, P75, P50, P25, P10, P3, 宝宝数据
-        const chinaLabels = ['P97', 'P75', 'P50', 'P25', 'P10', 'P3', '宝宝数据'];
-        const chinaClasses = ['p97', 'p75', 'p50', 'p25', 'p10', 'p3', 'user'];
+        // 中国标准: P97, P90, P75, P50, P25, P10, P3, 宝宝数据
+        const chinaLabels = ['P97', 'P90', 'P75', 'P50', 'P25', 'P10', 'P3', '宝宝数据'];
+        const chinaClasses = ['p97', 'p90', 'p75', 'p50', 'p25', 'p10', 'p3', 'user'];
 
         legendItems.forEach((item, i) => {
           item.querySelector('span').textContent = chinaLabels[i];
@@ -1104,6 +1260,23 @@
       updateCharts();
       updateLegend();
       updatePercentileResult();
+    }
+
+    // 切换图表类型
+    function switchChart(type) {
+      // 更新tab按钮状态
+      document.querySelectorAll('.chart-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.type === type);
+      });
+
+      // 更新图表卡片显示
+      document.querySelectorAll('.chart-card').forEach(card => {
+        card.classList.remove('active');
+      });
+      document.querySelector(`.chart-card.${type}`).classList.add('active');
+
+      // 更新图表数据
+      updateCharts();
     }
 
     // 选择性别
@@ -1214,34 +1387,41 @@
       let heightResult, weightResult, bmiResult;
 
       if (currentStandard === 'china') {
-        // 中国标准 - 百分位法
-        const hData = getChinaData(std.heightBoys, age);
-        const wData = getChinaData(std.weightBoys, age);
-        const bData = getChinaData(std.bmiBoys, age);
+        // 中国标准 - 百分位法（使用正确的性别数据）
+        const hGenderData = currentGender === 'boy' ? std.heightBoys : std.heightGirls;
+        const wGenderData = currentGender === 'boy' ? std.weightBoys : std.weightGirls;
+        const bGenderData = currentGender === 'boy' ? std.bmiBoys : std.bmiGirls;
+
+        const hData = getChinaData(hGenderData, age);
+        const wData = getChinaData(wGenderData, age);
+        const bData = getChinaData(bGenderData, age);
 
         heightResult = calculatePercentileChina(latest.height, hData.p3, hData.p10, hData.p25, hData.p50, hData.p75, hData.p90, hData.p97);
         weightResult = calculatePercentileChina(latest.weight, wData.p3, wData.p10, wData.p25, wData.p50, wData.p75, wData.p90, wData.p97);
         bmiResult = calculatePercentileChina(latest.bmi, bData.p3, bData.p10, bData.p25, bData.p50, bData.p75, bData.p90, bData.p97);
       } else {
-        // WHO标准 - Z-score法
-        const hData = getWHOData(std.heightBoys, age);
-        const wData = getWHOData(std.weightBoys, age);
-        const bData = getWHOData(std.bmiBoys, age);
+        // WHO标准 - Z-score法（使用LMS公式）
+        const hGenderData = currentGender === 'boy' ? std.heightBoys : std.heightGirls;
+        const wGenderData = currentGender === 'boy' ? std.weightBoys : std.weightGirls;
+        const bGenderData = currentGender === 'boy' ? std.bmiBoys : std.bmiGirls;
 
-        // 计算Z-score: (value - median) / SD
-        // WHO数据的第4列是-3SD，第7列是median，需要计算SD
-        const hSD = (hData.median - hData.n1);
-        const wSD = (wData.median - wData.n1);
-        const bSD = (bData.median - bData.n1);
+        const hData = hGenderData.data[age];
+        const wData = wGenderData.data[age];
+        const bData = bGenderData.data[age];
 
-        const hZ = calculateZScore(latest.height, hData.median, hSD);
-        const wZ = calculateZScore(latest.weight, wData.median, wSD);
-        const bZ = calculateZScore(latest.bmi, bData.median, bSD);
+        // WHO Z-score公式: Z = ((value/M)^L - 1) / (L * S), 当L=1时简化为 (value/M - 1) / S
+        const hZ = ((latest.height / hData[1]) - 1) / hData[2];
+        const wZ = ((latest.weight / wData[1]) - 1) / wData[2];
+        const bZ = ((latest.bmi / bData[1]) - 1) / bData[2];
 
-        heightResult = `Z=${hZ} (${hZ >= -2 && hZ <= 2 ? '正常' : hZ < -2 ? '偏低' : '偏高'})`;
-        weightResult = `Z=${wZ} (${wZ >= -2 && wZ <= 2 ? '正常' : wZ < -2 ? '偏低' : '偏高'})`;
-        bmiResult = `Z=${bZ} (${bZ >= -2 && bZ <= 2 ? '正常' : bZ < -2 ? '偏低' : '偏高'})`;
+        heightResult = `Z=${hZ.toFixed(2)} (${hZ >= -2 && hZ <= 2 ? '正常' : hZ < -2 ? '偏低' : '偏高'})`;
+        weightResult = `Z=${wZ.toFixed(2)} (${wZ >= -2 && wZ <= 2 ? '正常' : wZ < -2 ? '偏低' : '偏高'})`;
+        bmiResult = `Z=${bZ.toFixed(2)} (${bZ >= -2 && bZ <= 2 ? '正常' : bZ < -2 ? '偏低' : '偏高'})`;
       }
+
+      // 更新标题
+      const heading = document.getElementById('percentileHeading');
+      heading.textContent = currentStandard === 'china' ? '📈 当前百分位（基于最新记录）' : '📈 当前Z值（基于最新记录）';
 
       badgesDiv.innerHTML = `
         <span class="percentile-badge height">📏 身高: ${heightResult}</span>
