@@ -575,6 +575,31 @@
       .input-row {
         grid-template-columns: 1fr;
       }
+
+      .top-toolbar {
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .standard-switch {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .standard-btn {
+        padding: 8px 16px;
+        font-size: 0.85rem;
+      }
+
+      .gender-select {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .gender-option {
+        padding: 8px 16px;
+        font-size: 0.9rem;
+      }
     }
 
     /* 空数据提示 */
@@ -1306,7 +1331,6 @@
         alert('月龄必须是0-24的整数');
         return;
       }
-      debugger
 
       if (height < 0 || weight < 0) {
         alert('身高和体重不能为负数');
