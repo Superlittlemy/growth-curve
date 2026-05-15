@@ -6,7 +6,6 @@
 // BMI数据来源: bmi-boys-0-2-zscores.pdf (男孩), bmi-girls-0-2-zscores.pdf (女孩)
 
 // WHO标准使用 Z-scores: -3SD, -2SD, -1SD, Median, +1SD, +2SD, +3SD
-// 百分位参照: -3SD≈P0.1, -2SD≈P2.3, -1SD≈P15.9, Median=P50, +1SD≈P84.1, +2SD≈P97.7, +3SD≈P99.9
 
 const WHOStandards = {
   // 月龄列表（0-24个月）
